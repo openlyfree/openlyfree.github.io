@@ -360,10 +360,10 @@
     const ctx = offscreenContext;
     const width = offscreenCanvas.width;
     const height = offscreenCanvas.height;
-    const fontSize = 26;
-    const lineHeight = 42;
-    const padding = 44;
-    const maxChars = 72;
+    const fontSize = 20;
+    const lineHeight = 30;
+    const padding = 30;
+    const maxChars = 120;
 
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = "#071507";
