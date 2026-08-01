@@ -13,9 +13,14 @@
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^24.13.3",
+    "@types/three": "^0.185.3",
     "svelte": "^5.56.8",
     "svelte-check": "^4.7.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"
+  },
+  "dependencies": {
+    "@webcontainer/api": "^1.6.4",
+    "three": "^0.185.1"
   }
 }
