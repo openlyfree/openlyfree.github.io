@@ -227,6 +227,29 @@
     return null;
   }
 
+  async function fetchProfileReadme(username: string) {
+    const candidates = [
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(username)}/main/README.md`,
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(username)}/master/README.md`,
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(username)}/main/README`,
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(username)}/master/README`,
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(username)}/main/readme.md`,
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(username)}/master/readme.md`
+    ];
+
+    for (const url of candidates) {
+      const response = await fetch(url);
+      if (response.ok) {
+        return await response.text();
+      }
+      if (response.status !== 404) {
+        break;
+      }
+    }
+
+    return null;
+  }
+
   async function buildRepoFileTree(repos: GitHubRepo[]): Promise<FileSystemTree> {
     const directory: FileSystemTree = {};
     const readmes = await Promise.all(
@@ -676,14 +699,16 @@
 
         return { projectsTree, loadedRepoCount };
       })();
+      const profileReadmeLoad = fetchProfileReadme(githubUsername);
 
       await playBootSequence();
       const { projectsTree, loadedRepoCount } = await repoLoad;
+      const profileReadme = (await profileReadmeLoad) ?? "Professional yapper. Amateur programmer. Serial project abandoner.";
 
       const files: FileSystemTree = {
         "about.txt": {
           file: {
-            contents: "Professional yapper. Amateur programmer. Serial project abandoner."
+            contents: profileReadme
           }
         },
         projects: projectsTree
