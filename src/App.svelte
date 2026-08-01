@@ -3,6 +3,7 @@
   import { WebContainer } from "@webcontainer/api";
   import type { FileSystemTree, WebContainerProcess } from "@webcontainer/api";
   import * as THREE from "three";
+  import { waitForCrossOriginIsolation } from "./crossOriginIsolation";
 
   type TerminalLine = {
     text: string;
@@ -682,6 +683,8 @@
 
   async function bootWebContainer() {
     try {
+      const coep = await waitForCrossOriginIsolation();
+
       const repoLoad = (async () => {
         let projectsTree = buildFallbackProjectTree();
         let loadedRepoCount = 0;
@@ -714,7 +717,7 @@
         projects: projectsTree
       };
 
-      webContainer = await WebContainer.boot();
+      webContainer = await WebContainer.boot({ coep });
       await webContainer.mount(files);
       homeDirectory = webContainer.workdir;
       currentDirectory = homeDirectory;
