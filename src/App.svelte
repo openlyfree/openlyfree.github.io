@@ -158,6 +158,30 @@
     dirty = true;
   }
 
+  function sleep(ms: number) {
+    return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  async function playBootSequence() {
+    terminalHistory = [];
+    dirty = true;
+
+    const bootLines = [
+      ">>> power on",
+      "[OK] CRT phosphor warmed",
+      "[OK] scanlines calibrated",
+      "[OK] shell interface linked",
+      "[..] searching public GitHub repos",
+      "[..] mounting project archive",
+      "[OK] terminal ready"
+    ];
+
+    for (const line of bootLines) {
+      pushOutput(line);
+      await sleep(180);
+    }
+  }
+
   async function fetchAllPublicRepos(username: string) {
     const perPage = 100;
     const repos: GitHubRepo[] = [];
@@ -635,20 +659,26 @@
 
   async function bootWebContainer() {
     try {
-      pushOutput("Booting StackBlitz WebContainer…");
-      let projectsTree = buildFallbackProjectTree();
-      let loadedRepoCount = 0;
+      const repoLoad = (async () => {
+        let projectsTree = buildFallbackProjectTree();
+        let loadedRepoCount = 0;
 
-      try {
-        const repos = await fetchAllPublicRepos(githubUsername);
-        projectNames = repos.map((repo) => repo.name);
-        projectsTree = await buildRepoFileTree(repos);
-        loadedRepoCount = repos.length;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to load public GitHub repos.";
-        pushOutput(`GitHub repo load failed: ${message}`);
-        projectNames = ["desmosinator", "dappendble", "lapis-mc", "MergeMaterial", "rebar"];
-      }
+        try {
+          const repos = await fetchAllPublicRepos(githubUsername);
+          projectNames = repos.map((repo) => repo.name);
+          projectsTree = await buildRepoFileTree(repos);
+          loadedRepoCount = repos.length;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Failed to load public GitHub repos.";
+          pushOutput(`GitHub repo load failed: ${message}`);
+          projectNames = ["desmosinator", "dappendble", "lapis-mc", "MergeMaterial", "rebar"];
+        }
+
+        return { projectsTree, loadedRepoCount };
+      })();
+
+      await playBootSequence();
+      const { projectsTree, loadedRepoCount } = await repoLoad;
 
       const files: FileSystemTree = {
         "about.txt": {
