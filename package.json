@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "postinstall": "mkdir -p public && cp node_modules/coi-serviceworker/coi-serviceworker.min.js public/coi-serviceworker.min.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -21,6 +22,7 @@
   },
   "dependencies": {
     "@webcontainer/api": "^1.6.4",
+    "coi-serviceworker": "^0.1.7",
     "three": "^0.185.1"
   }
 }
