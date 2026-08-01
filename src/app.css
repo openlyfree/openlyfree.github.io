@@ -1,30 +1,93 @@
-:root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-        rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-    --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-    --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-    --mono: ui-monospace, Consolas, monospace;
+body {
+  margin: 0;
+  background-color: #050505;
+  color: #39d353;
+  font-family: monospace;
+  overflow: hidden;
+}
 
-    font: 18px/145% var(--sans);
-    letter-spacing: 0.18px;
-    color-scheme: light dark;
-    color: var(--text);
-    background: var(--bg);
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+/* CRT Container / Screen effect */
+.crt {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at center, #111a11 0%, #030703 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+}
 
-    @media (max-width: 1024px) {
-        font-size: 16px;
-    }
+.screen {
+  position: relative;
+  width: 90%;
+  height: 90%;
+  padding: 40px;
+  overflow-y: auto;
+  box-sizing: border-box;
+
+  /* Phosphor glow */
+  text-shadow: 0 0 8px rgba(57, 211, 83, 0.6);
+
+  /* Slight curvature borders */
+  border-radius: 20px;
+}
+
+/* Scanlines overlay */
+.crt::after {
+  content: " ";
+  display: block;
+  position: fixed;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%),
+              linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  z-index: 99999;
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none;
+}
+
+/* Subtle screen flicker */
+@keyframes flicker {
+  0% { opacity: 0.97; }
+  50% { opacity: 1; }
+  100% { opacity: 0.98; }
+}
+
+.crt {
+  animation: flicker 0.15s infinite;
+}
+
+/* Terminal lines layout */
+.output-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.output {
+  white-space: pre-wrap;
+  color: #2ea043;
+}
+
+.input-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.prompt {
+  color: #39d353;
+  font-weight: bold;
+}
+
+input {
+  background: transparent;
+  border: none;
+  color: #39d353;
+  font-family: monospace;
+  font-size: 1rem;
+  outline: none;
+  flex-grow: 1;
+  text-shadow: 0 0 8px rgba(57, 211, 83, 0.6);
 }
