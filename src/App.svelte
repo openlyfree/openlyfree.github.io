@@ -28,22 +28,26 @@
 </script>
 
 <main class="crt">
-  <div class="screen">
-    <div class="output-container">
-      {#each terminalHistory as line}
-        <div class={line.type}>{line.text}</div>
-      {/each}
-    </div>
+  <div class="bezel">
+    <div class="screen">
+      <div class="screen-inner">
+        <div class="output-container">
+          {#each terminalHistory as line}
+            <div class={line.type}>{line.text}</div>
+          {/each}
+        </div>
 
-    <div class="input-line">
-      <span class="prompt">ethan@portfolio:~$</span>
-      <input
-        type="text"
-        bind:value={inputCommand}
-        on:keydown={handleKeyDown}
-        autofocus
-        spellcheck="false"
-      />
+        <div class="input-line">
+          <span class="prompt">ethan@portfolio:~$</span>
+          <input
+            type="text"
+            bind:value={inputCommand}
+            on:keydown={handleKeyDown}
+            autofocus
+            spellcheck="false"
+          />
+        </div>
+      </div>
     </div>
   </div>
 </main>
