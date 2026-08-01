@@ -9,7 +9,22 @@
     type: "input" | "output";
   };
 
+  type GitHubRepo = {
+    name: string;
+    default_branch: string;
+    description: string | null;
+    html_url: string;
+    homepage: string | null;
+    language: string | null;
+    stargazers_count: number;
+    forks_count: number;
+    updated_at: string;
+    archived: boolean;
+    fork: boolean;
+  };
+
   let homeDirectory = "/workspace";
+  const githubUsername = "openlyfree";
   const knownCommands = [
     "ls",
     "cat",
@@ -39,6 +54,7 @@
   let webContainer: WebContainer | null = null;
   let webContainerReady = false;
   let commandRunning = false;
+  let projectNames: string[] = [];
 
   let crtCanvas: HTMLCanvasElement | null = null;
   let offscreenCanvas: HTMLCanvasElement | null = null;
@@ -93,6 +109,16 @@
   }
 
   async function isDirectory(path: string) {
+    const projectRoot = normalizeAbsolutePath(`${homeDirectory}/projects`);
+    if (path === projectRoot) {
+      return true;
+    }
+    if (path.startsWith(`${projectRoot}/`)) {
+      const [repoName] = path.slice(projectRoot.length + 1).split("/");
+      if (projectNames.includes(repoName)) {
+        return true;
+      }
+    }
     if (!webContainer) {
       return false;
     }
@@ -130,6 +156,107 @@
     dirty = true;
   }
 
+  async function fetchAllPublicRepos(username: string) {
+    const perPage = 100;
+    const repos: GitHubRepo[] = [];
+
+    for (let page = 1; ; page++) {
+      const response = await fetch(
+        `https://api.github.com/users/${encodeURIComponent(username)}/repos?per_page=${perPage}&page=${page}&sort=updated&direction=desc&visibility=public`
+      );
+
+      if (!response.ok) {
+        throw new Error(`GitHub API request failed with status ${response.status}.`);
+      }
+
+      const pageRepos = (await response.json()) as GitHubRepo[];
+      repos.push(...pageRepos.filter((repo) => !repo.archived).sort((a, b) => a.name.localeCompare(b.name)));
+
+      if (pageRepos.length < perPage) {
+        break;
+      }
+    }
+
+    return repos.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async function fetchRepoReadme(username: string, repo: GitHubRepo) {
+    const candidates = [
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(repo.name)}/${encodeURIComponent(repo.default_branch)}/README.md`,
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(repo.name)}/${encodeURIComponent(repo.default_branch)}/README`,
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(repo.name)}/${encodeURIComponent(repo.default_branch)}/readme.md`,
+      `https://raw.githubusercontent.com/${encodeURIComponent(username)}/${encodeURIComponent(repo.name)}/${encodeURIComponent(repo.default_branch)}/README.MD`
+    ];
+
+    for (const url of candidates) {
+      const response = await fetch(url);
+      if (response.ok) {
+        return await response.text();
+      }
+      if (response.status !== 404) {
+        break;
+      }
+    }
+
+    return null;
+  }
+
+  async function buildRepoFileTree(repos: GitHubRepo[]): Promise<FileSystemTree> {
+    const directory: FileSystemTree = {};
+    const readmes = await Promise.all(
+      repos.map(async (repo) => {
+        try {
+          return {
+            name: repo.name,
+            readme: await fetchRepoReadme(githubUsername, repo)
+          };
+        } catch {
+          return {
+            name: repo.name,
+            readme: null
+          };
+        }
+      })
+    );
+
+    for (const repo of repos) {
+      const readme = readmes.find((entry) => entry.name === repo.name)?.readme;
+      const contents =
+        readme ??
+        [
+          `# ${repo.name}`,
+          "",
+          repo.description ?? "No description provided.",
+          "",
+          `Repository: ${repo.html_url}`
+        ].join("\n");
+
+      directory[repo.name] = {
+        directory: {
+          "project.md": {
+            file: {
+              contents
+            }
+          }
+        }
+      };
+    }
+
+    return { directory };
+  }
+
+  function buildFallbackProjectTree(): FileSystemTree {
+    return {
+      directory: {
+        desmosinator: { directory: { "project.md": { file: { contents: "A graphing side project." } } } },
+        dappendble: { directory: { "project.md": { file: { contents: "A tiny app experiment." } } } },
+        "lapis-mc": { directory: { "project.md": { file: { contents: "Minecraft-related tooling project." } } } },
+        MergeMaterial: { directory: { "project.md": { file: { contents: "A material/merge utility prototype." } } } },
+        rebar: { directory: { "project.md": { file: { contents: "Another side project in progress." } } } }
+      }
+    };
+  }
+
   async function spawnCommand(command: string): Promise<WebContainerProcess> {
     if (!webContainer) {
       throw new Error("WebContainer is unavailable.");
@@ -159,7 +286,7 @@
     }
 
     if (command === "help") {
-      pushOutput("Try: ls, pwd, cat about.txt, cd projects, clear. Press Tab for completion.");
+      pushOutput("Try: ls, pwd, cat about.txt, cd projects, clear. Then cd into a repo and cat project.md. Press Tab for completion.");
       return;
     }
 
@@ -177,7 +304,9 @@
 
     try {
       if (command === "cd" || command.startsWith("cd ")) {
-        const destinationArg = command.slice(2).trim();
+        const cdMatch = command.match(/^cd(?:\s+(.+?))?(?:\s*(?:&&|;)\s*(.+))?$/);
+        const destinationArg = cdMatch?.[1]?.trim() ?? "";
+        const chainedCommand = cdMatch?.[2]?.trim() ?? "";
         const destination = destinationArg === "" || destinationArg === "~" ? homeDirectory : resolvePath(destinationArg);
         const existsAsDirectory = await isDirectory(destination);
         if (!existsAsDirectory) {
@@ -186,6 +315,36 @@
         }
         currentDirectory = destination;
         dirty = true;
+
+        if (chainedCommand !== "") {
+          const process = await spawnCommand(`cd ${shellEscape(currentDirectory)} && ${chainedCommand}`);
+          let buffer = "";
+
+          const outputDone = process.output.pipeTo(
+            new WritableStream({
+              write(chunk) {
+                const merged = `${buffer}${chunk}`.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+                const parts = merged.split("\n");
+                buffer = parts.pop() ?? "";
+                for (const line of parts) {
+                  terminalHistory = [...terminalHistory, { text: line, type: "output" }];
+                }
+                dirty = true;
+              }
+            })
+          );
+
+          const exitCode = await process.exit;
+          await outputDone;
+
+          if (buffer.length > 0) {
+            terminalHistory = [...terminalHistory, { text: buffer, type: "output" }];
+          }
+          if (exitCode !== 0) {
+            terminalHistory = [...terminalHistory, { text: `[exit ${exitCode}]`, type: "output" }];
+          }
+          dirty = true;
+        }
         return;
       }
 
@@ -468,30 +627,39 @@
   }
 
   async function bootWebContainer() {
-    const files: FileSystemTree = {
-      "about.txt": {
-        file: {
-          contents: "Professional yapper. Amateur programmer. Serial project abandoner."
-        }
-      },
-      projects: {
-        directory: {
-          desmosinator: { file: { contents: "A graphing side project." } },
-          dappendble: { file: { contents: "A tiny app experiment." } },
-          "lapis-mc": { file: { contents: "Minecraft-related tooling project." } },
-          MergeMaterial: { file: { contents: "A material/merge utility prototype." } },
-          rebar: { file: { contents: "Another side project in progress." } }
-        }
-      }
-    };
-
     try {
       pushOutput("Booting StackBlitz WebContainer…");
+      let projectsTree = buildFallbackProjectTree();
+      let loadedRepoCount = 0;
+
+      try {
+        const repos = await fetchAllPublicRepos(githubUsername);
+        projectNames = repos.map((repo) => repo.name);
+        projectsTree = await buildRepoFileTree(repos);
+        loadedRepoCount = repos.length;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load public GitHub repos.";
+        pushOutput(`GitHub repo load failed: ${message}`);
+        projectNames = ["desmosinator", "dappendble", "lapis-mc", "MergeMaterial", "rebar"];
+      }
+
+      const files: FileSystemTree = {
+        "about.txt": {
+          file: {
+            contents: "Professional yapper. Amateur programmer. Serial project abandoner."
+          }
+        },
+        projects: projectsTree
+      };
+
       webContainer = await WebContainer.boot();
       await webContainer.mount(files);
       homeDirectory = webContainer.workdir;
       currentDirectory = homeDirectory;
       webContainerReady = true;
+      if (loadedRepoCount > 0) {
+        pushOutput(`Loaded ${loadedRepoCount} public GitHub repos.`);
+      }
       pushOutput("WebContainer ready.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "WebContainer failed to boot.";
