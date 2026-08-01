@@ -63,6 +63,7 @@
   let resizeObserver: ResizeObserver | null = null;
   let animationFrameId = 0;
   let blinkIntervalId = 0;
+  let terminalScrollOffset = 0;
   let dirty = true;
   let caretVisible = true;
 
@@ -153,6 +154,7 @@
     const lines = normalized.split("\n");
     const entries = lines.map((line) => ({ text: line, type: "output" as const }));
     terminalHistory = [...terminalHistory, ...entries];
+    terminalScrollOffset = 0;
     dirty = true;
   }
 
@@ -277,6 +279,7 @@
     const command = inputCommand.trim();
     terminalHistory = [...terminalHistory, { text: `${getPrompt()} ${command}`, type: "input" }];
     inputCommand = "";
+    terminalScrollOffset = 0;
     dirty = true;
 
     if (command === "clear") {
@@ -547,7 +550,11 @@
     }
 
     const maxRows = Math.floor((height - padding * 2) / lineHeight);
-    const visible = renderedLines.slice(-maxRows);
+    const maxScroll = Math.max(0, renderedLines.length - maxRows);
+    terminalScrollOffset = Math.max(0, Math.min(terminalScrollOffset, maxScroll));
+    const scrollRows = Math.round(terminalScrollOffset);
+    const startIndex = Math.max(0, renderedLines.length - maxRows - scrollRows);
+    const visible = renderedLines.slice(startIndex, startIndex + maxRows);
 
     let y = padding;
     for (const line of visible) {
@@ -736,11 +743,23 @@
       dirty = true;
     }, 470);
 
+    const handleTerminalWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        return;
+      }
+
+      event.preventDefault();
+      terminalScrollOffset = Math.max(0, terminalScrollOffset + event.deltaY / 24);
+      dirty = true;
+    };
+
     window.addEventListener("keydown", handleTerminalInput);
+    window.addEventListener("wheel", handleTerminalWheel, { passive: false });
     void bootWebContainer();
 
     return () => {
       window.removeEventListener("keydown", handleTerminalInput);
+      window.removeEventListener("wheel", handleTerminalWheel);
       window.clearInterval(blinkIntervalId);
       cancelAnimationFrame(animationFrameId);
       resizeObserver?.disconnect();
